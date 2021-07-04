@@ -111,6 +111,27 @@ class _OpenSlide:
         return obj
 
 
+class _OpenSlideCache:
+    """Wrapper class to make sure we correctly pass an OpenSlide cache."""
+
+    def __init__(self, ptr):
+        self._as_parameter_ = ptr
+        # Retain a reference to cache_release() to avoid GC problems during
+        # interpreter shutdown
+        self._cache_release = cache_release
+
+    def __del__(self):
+        self._cache_release(self)
+
+    @classmethod
+    def from_param(cls, obj):
+        if obj.__class__ != cls:
+            raise ValueError("Not an OpenSlide cache reference")
+        if not obj._as_parameter_:
+            raise ValueError("Passing undefined cache object")
+        return obj
+
+
 class _utf8_p:
     """Wrapper class to convert string arguments to bytes."""
 
@@ -144,6 +165,13 @@ def _check_open(result, _func, _args):
 # prevent further operations on slide handle after it is closed
 def _check_close(_result, _func, args):
     args[0].invalidate()
+
+
+# check for errors creating a cache and wrap the resulting handle
+def _check_cache_create(result, _func, _args):
+    if result is None:
+        raise OpenSlideError("invalid cache size")
+    return _OpenSlideCache(c_void_p(result))
 
 
 # Convert returned byte array, if present, into a string
@@ -291,3 +319,23 @@ def read_associated_image(slide, name):
 
 
 get_version = _func('openslide_get_version', c_char_p, [], _check_string)
+
+cache_create = _func(
+    'openslide_cache_create',
+    c_void_p,
+    [c_int64],
+    _check_cache_create,
+    minimum_version='3.5.0',
+)
+
+set_cache = _func(
+    'openslide_set_cache',
+    None,
+    [_OpenSlide, _OpenSlideCache],
+    None,
+    minimum_version='3.5.0',
+)
+
+cache_release = _func(
+    'openslide_cache_release', None, [_OpenSlideCache], None, minimum_version='3.5.0'
+)
