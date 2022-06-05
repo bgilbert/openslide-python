@@ -1,0 +1,43 @@
+# Unprivileged first part of dco-report.yml.  Architecture and code from
+# https://securitylab.github.com/research/github-actions-preventing-pwn-requests/
+#
+# Invoke with:
+#
+#     name: DCO
+#     on:
+#       pull_request:
+#         branches: [main]
+#     permissions:
+#       contents: read
+#     jobs:
+#       check:
+#         name: Organization
+#         uses: openslide/openslide-python/.github/workflows/dco-check.yml@main
+
+on:
+  workflow_call:
+
+jobs:
+  check:
+    name: Check signoffs
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out repo
+      uses: actions/checkout@v2
+    - name: Install dco-check
+      run: pip install dco-check
+    - name: Check signoffs
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        mkdir result
+        echo ${{ github.event.number }} > result/pr
+        echo ${{ github.event.pull_request.base.sha }} > result/base
+        echo ${{ github.event.pull_request.head.sha }} > result/head
+        dco-check -v
+        touch result/success
+    - uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: result
+        path: result

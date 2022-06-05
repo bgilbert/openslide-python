@@ -1,0 +1,126 @@
+# Privileged second part of dco-check.yml.  Architecture and code from
+# https://securitylab.github.com/research/github-actions-preventing-pwn-requests/
+#
+# Invoke with:
+#
+#     name: DCO report
+#     on:
+#       workflow_run:
+#         workflows: ["DCO"]
+#         types:
+#           - completed
+#     permissions:
+#       pull-requests: write
+#     jobs:
+#       comment:
+#         name: Organization
+#         uses: openslide/openslide-python/.github/workflows/dco-report.yml@main
+
+on:
+  workflow_call:
+
+jobs:
+  comment:
+    name: Post PR comment
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.event == 'pull_request' }}
+    steps:
+      - name: Download state
+        uses: actions/github-script@v6
+        with:
+          script: |
+            var artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+               owner: context.repo.owner,
+               repo: context.repo.repo,
+               run_id: ${{ github.event.workflow_run.id }},
+            });
+            var matchArtifact = artifacts.data.artifacts.filter((artifact) => {
+              return artifact.name == "result"
+            })[0];
+            var download = await github.rest.actions.downloadArtifact({
+               owner: context.repo.owner,
+               repo: context.repo.repo,
+               artifact_id: matchArtifact.id,
+               archive_format: 'zip',
+            });
+            var fs = require('fs');
+            fs.writeFileSync('${{ github.workspace }}/result.zip', Buffer.from(download.data));
+
+      - name: Read state
+        id: result
+        run: |
+          unzip -d result result.zip
+          echo "::set-output name=pr::$(cat result/pr)"
+          echo "::set-output name=base::$(cat result/base)"
+          echo "::set-output name=head::$(cat result/head)"
+          if [ -e result/success ]; then
+              echo "::set-output name=success::true"
+          fi
+
+      - name: Find existing comment
+        uses: peter-evans/find-comment@v2
+        id: search
+        continue-on-error: true
+        with:
+          issue-number: ${{ steps.result.outputs.pr }}
+          comment-author: 'github-actions[bot]'
+          body-includes: Developer Certificate of Origin
+
+      - name: Report good signoff
+        uses: peter-evans/create-or-update-comment@v2
+        if: steps.result.outputs.success == 'true'
+        with:
+          issue-number: ${{ steps.result.outputs.pr }}
+          comment-id: ${{ steps.search.outputs.comment-id }}
+          edit-mode: replace
+          body: >
+            ## DCO signed off :heavy_check_mark:
+
+
+            [All commits][commits] have been signed off.  You have certified
+            to the terms of the [Developer Certificate of Origin][dco],
+            version 1.1.  In particular, you certify that this contribution
+            has not been developed using information obtained under a
+            non-disclosure agreement or other license terms that forbid you
+            from contributing it under the [GNU Lesser General Public
+            License, version 2.1][lgpl].
+
+
+            [commits]: ${{ github.server_url }}//${{ github.repository }}/compare/${{ steps.result.outputs.base }}...${{ steps.result.outputs.head }}
+
+            [dco]: https://developercertificate.org/
+
+            [lgpl]: https://github.com/openslide/openslide/blob/main/lgpl-2.1.txt
+
+      - name: Report bad signoff
+        uses: peter-evans/create-or-update-comment@v2
+        if: steps.result.outputs.success != 'true'
+        with:
+          issue-number: ${{ steps.result.outputs.pr }}
+          comment-id: ${{ steps.search.outputs.comment-id }}
+          edit-mode: replace
+          body: >
+            ## DCO not signed off :x:
+
+
+            [One or more commits][commits] have not been signed off.  All
+            changes contributed to the OpenSlide project must certify to the
+            terms of the [Developer Certificate of Origin][dco], version
+            1.1.  Note that by doing so, you certify that this contribution
+            has not been developed using information obtained under a
+            non-disclosure agreement or other license terms that forbid you
+            from contributing it under the [GNU Lesser General Public
+            License, version 2.1][lgpl].
+
+
+            To certify to the [Developer Certificate of Origin][dco], add
+            `Signed-off-by: Your Name <your.email@example.com>` to each
+            commit message.  `git commit --signoff` will do this for you
+            automatically.
+
+
+            [commits]: ${{ github.server_url }}//${{ github.repository }}/compare/${{ steps.result.outputs.base }}...${{ steps.result.outputs.head }}
+
+            [dco]: https://developercertificate.org/
+
+            [lgpl]: https://github.com/openslide/openslide/blob/main/lgpl-2.1.txt
