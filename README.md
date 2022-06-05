@@ -64,3 +64,4 @@ components so OpenSlide Python can find OpenSlide, see the package
 
 OpenSlide Python is released under the terms of the [GNU Lesser General
 Public License, version 2.1](https://raw.github.com/openslide/openslide-python/main/lgpl-2.1.txt).
+z
