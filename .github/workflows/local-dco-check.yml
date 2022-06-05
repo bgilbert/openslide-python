@@ -1,0 +1,13 @@
+name: DCO
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Organization
+    uses: bgilbert/openslide-python/.github/workflows/dco-check.yml@main
