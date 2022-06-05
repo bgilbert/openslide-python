@@ -10,4 +10,7 @@ permissions:
 jobs:
   check:
     name: Organization
-    uses: bgilbert/openslide-python/.github/workflows/dco-check.yml@main
+    runs-on: ubuntu-latest
+    steps:
+      - name: z
+        run: true
